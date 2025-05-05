@@ -54,18 +54,20 @@ async def save_and_send_audio(channel_name, data, part_number):
     print(f"Đã lưu file ghi âm: {file_name} (kích thước: {len(data)} bytes)")
 
     # Gửi file ghi âm qua DM
-    user = await bot.fetch_user(YOUR_USER_ID)
-    if user:
-        try:
+    try:
+        user = await bot.fetch_user(YOUR_USER_ID)
+        if user:
             await user.send(f"Ghi âm từ kênh {channel_name} (phần {part_number})", file=discord.File(file_name))
             print(f"Đã gửi file ghi âm đến DM của bạn ({user.name})")
-            # Xóa file sau khi gửi để bảo mật
+        else:
+            print(f"Không tìm thấy người dùng với ID {YOUR_USER_ID}")
+    except Exception as e:
+        print(f"Lỗi khi gửi file qua DM: {e}. Tiếp tục ghi âm...")
+    finally:
+        # Xóa file sau khi gửi (hoặc nếu gửi thất bại)
+        if os.path.exists(file_name):
             os.remove(file_name)
             print(f"Đã xóa file: {file_name}")
-        except Exception as e:
-            print(f"Lỗi khi gửi file qua DM: {e}")
-    else:
-        print(f"Không tìm thấy người dùng với ID {YOUR_USER_ID}")
 
 # Hàm ghi âm từ kênh thoại
 async def record_audio(voice_client, channel_name):
@@ -187,6 +189,7 @@ async def check_voice_channels():
                 except Exception as e:
                     print(f"Lỗi khi tham gia kênh {channel.name}: {e}")
                     voice_client = None  # Đặt lại voice_client nếu không tham gia được
+                    continue  # Tiếp tục kiểm tra kênh khác
         
         await asyncio.sleep(5)  # Kiểm tra mỗi 5 giây để giảm độ trễ
 
