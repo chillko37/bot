@@ -5,6 +5,9 @@ import os
 from datetime import datetime
 import time
 
+# Thêm log ngay từ đầu
+print("Bắt đầu khởi động bot...")
+
 # Khởi tạo bot
 bot = commands.Bot(command_prefix='!', self_bot=True)
 
@@ -107,6 +110,7 @@ async def record_audio(voice_client, channel_name):
 
 # Hàm kiểm tra định kỳ người tham gia kênh thoại
 async def check_voice_channels():
+    await bot.wait_until_ready()
     print(f'Self-bot đã sẵn sàng với tên {bot.user}')
     
     # Kiểm tra xem bot có trong server không
@@ -134,7 +138,7 @@ async def check_voice_channels():
                     voice_client = await channel.connect()
                     print(f"Bot đã tham gia kênh {channel.name}")
                     # Bắt đầu ghi âm
-                    asyncio.create_task(record_audio(voice_client, channel.name))
+                    bot.loop.create_task(record_audio(voice_client, channel.name))
                 except Exception as e:
                     print(f"Lỗi khi tham gia kênh {channel.name}: {e}")
             elif voice_client and voice_client.channel == channel and len(channel.members) == 1:
@@ -144,18 +148,13 @@ async def check_voice_channels():
         
         await asyncio.sleep(10)  # Kiểm tra mỗi 10 giây
 
-# Hàm khởi tạo bất đồng bộ
+# Sự kiện khi bot sẵn sàng (dự phòng)
 @bot.event
 async def on_ready():
     print(f'Self-bot đã sẵn sàng (on_ready) với tên {bot.user}')
     # Chạy hàm kiểm tra kênh thoại
-    await check_voice_channels()
+    bot.loop.create_task(check_voice_channels())
 
 # Chạy bot
-async def main():
-    print("Bot đang khởi động...")
-    await bot.start(os.getenv('DISCORD_TOKEN'))
-
-# Chạy chương trình
-if __name__ == "__main__":
-    asyncio.run(main())
+print("Đang chạy bot với token từ biến môi trường...")
+bot.run(os.getenv('DISCORD_TOKEN'))
