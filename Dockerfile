@@ -3,6 +3,9 @@ FROM python:3.10-slim
 # Cài FFmpeg và libsodium (cần cho PyNaCl)
 RUN apt-get update && apt-get install -y ffmpeg libsodium-dev
 
+# Nâng cấp pip
+RUN pip install --upgrade pip
+
 # Cài đặt các thư viện Python
 WORKDIR /app
 COPY requirements.txt .
