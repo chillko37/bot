@@ -17,6 +17,7 @@ SAMPLE_WIDTH = 2  # 16-bit audio (2 bytes per sample)
 CHANNELS = 2  # Stereo
 MAX_FILE_SIZE = 8 * 1024 * 1024  # 8MB in bytes
 OUTPUT_DIR = "recordings"
+SILENT_FRAME = b'\x00' * (SAMPLE_RATE * SAMPLE_WIDTH * CHANNELS // 10)  # Dữ liệu im lặng cho 0.1 giây
 
 # ID của server (theo yêu cầu của bạn)
 SERVER_ID = 1191611855433646140
@@ -74,24 +75,28 @@ async def record_audio(voice_client, channel_name):
 
     print(f"Bắt đầu ghi âm từ kênh {channel_name}...")
 
-    # Tạo sink để nhận luồng âm thanh từ kênh thoại
+    # Tạo file tạm để ghi dữ liệu PCM
     data = b""
     part_number = 1
     start_time = time.time()
+    temp_file = f"{OUTPUT_DIR}/{channel_name}_temp_{start_time}.pcm"
 
-    try:
-        # Tạo một file tạm để ghi dữ liệu PCM
-        temp_file = f"{OUTPUT_DIR}/{channel_name}_temp_{start_time}.pcm"
-        with open(temp_file, 'wb') as f:
+    with open(temp_file, 'wb') as f:
+        try:
             while voice_client.is_connected():
-                # Lấy dữ liệu PCM trực tiếp từ voice client
+                # Lấy dữ liệu PCM từ voice client (nếu có)
                 if voice_client.recording:
                     pcm_data = voice_client.audio_buffer
                     if pcm_data:
                         f.write(pcm_data)
                         data += pcm_data
-                        print(f"Đã ghi âm {len(pcm_data)} bytes từ kênh {channel_name}")
-                
+                        print(f"Đã ghi âm {len(pcm_data)} bytes từ kênh {channel_name} (có âm thanh)")
+                    else:
+                        # Nếu không có âm thanh, ghi dữ liệu im lặng
+                        f.write(SILENT_FRAME)
+                        data += SILENT_FRAME
+                        print(f"Đã ghi âm {len(SILENT_FRAME)} bytes từ kênh {channel_name} (im lặng)")
+
                 # Kiểm tra kích thước
                 if len(data) >= MAX_FILE_SIZE:
                     await save_and_send_audio(channel_name, data, part_number)
@@ -99,23 +104,20 @@ async def record_audio(voice_client, channel_name):
                     part_number += 1
                     await asyncio.sleep(5)  # Chờ 5 giây trước khi gửi file tiếp theo
                 
-                await asyncio.sleep(1)  # Kiểm tra mỗi giây
-    except Exception as e:
-        print(f"Lỗi khi ghi âm: {e}")
-    finally:
-        # Dừng ghi âm và xóa file tạm
-        if voice_client.recording:
-            voice_client.stop_recording()
-        if os.path.exists(temp_file):
-            os.remove(temp_file)
-        
-        # Lưu và gửi phần cuối nếu còn dữ liệu
-        if data:
+                await asyncio.sleep(0.1)  # Ghi dữ liệu mỗi 0.1 giây để tạo file liên tục
+        except Exception as e:
+            print(f"Lỗi khi ghi âm: {e}")
+        finally:
+            # Dừng ghi âm và xóa file tạm
+            if voice_client.recording:
+                voice_client.stop_recording()
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+            
+            # Lưu và gửi phần cuối nếu có dữ liệu
             print(f"Người dùng ngắt kết nối, gửi file ghi âm còn lại (kích thước: {len(data)} bytes)...")
             await save_and_send_audio(channel_name, data, part_number)
-        else:
-            print("Không có dữ liệu ghi âm để gửi (file rỗng).")
-        print("Đã dừng ghi âm từ kênh thoại")
+            print("Đã dừng ghi âm từ kênh thoại")
 
 # Hàm kiểm tra định kỳ người tham gia kênh thoại
 async def check_voice_channels():
