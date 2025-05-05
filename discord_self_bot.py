@@ -7,8 +7,15 @@ import time
 import signal
 import sys
 
-# Thêm log ngay từ đầu
-print("Bắt đầu khởi động bot...")
+# Thêm log ngay từ đầu để kiểm tra khởi động
+print("Starting Container - Đang khởi động container...")
+print("Kiểm tra biến môi trường DISCORD_TOKEN...")
+token = os.getenv('DISCORD_TOKEN')
+if not token:
+    print("Lỗi: Không tìm thấy DISCORD_TOKEN trong biến môi trường. Vui lòng cập nhật token trên Railway.")
+    sys.exit(1)
+else:
+    print("DISCORD_TOKEN đã được tìm thấy. Đang khởi động bot...")
 
 # Khởi tạo bot
 bot = commands.Bot(command_prefix='!', self_bot=True)
@@ -29,10 +36,14 @@ YOUR_USER_ID = 1080848303580782592
 
 # Tạo thư mục lưu file ghi âm nếu chưa có
 if not os.path.exists(OUTPUT_DIR):
+    print(f"Tạo thư mục {OUTPUT_DIR} để lưu file ghi âm...")
     os.makedirs(OUTPUT_DIR)
+else:
+    print(f"Thư mục {OUTPUT_DIR} đã tồn tại.")
 
 # Hàm lưu và gửi file ghi âm
 async def save_and_send_audio(channel_name, data, part_number):
+    print(f"Đang lưu file ghi âm cho kênh {channel_name} (phần {part_number})...")
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     file_name = f"{OUTPUT_DIR}/{channel_name}_{timestamp}_part{part_number}.wav"
     
@@ -254,5 +265,7 @@ try:
     loop.run_until_complete(bot.start(os.getenv('DISCORD_TOKEN')))
 except KeyboardInterrupt:
     loop.run_until_complete(shutdown())
+except Exception as e:
+    print(f"Lỗi khi khởi động bot: {e}")
 finally:
     handle_shutdown(loop)
