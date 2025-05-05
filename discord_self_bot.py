@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 import time
 
-# Khởi tạo bot (bỏ Intents để tránh lỗi)
+# Khởi tạo bot
 bot = commands.Bot(command_prefix='!', self_bot=True)
 
 # Thêm log để kiểm tra bot khởi động
@@ -108,54 +108,53 @@ async def record_audio(voice_client, channel_name):
             await save_and_send_audio(channel_name, data, part_number)
         print("Đã dừng ghi âm từ kênh thoại")
 
-# Sự kiện khi bot sẵn sàng
-@bot.event
-async def on_ready():
+# Hàm kiểm tra định kỳ người tham gia kênh thoại
+async def check_voice_channels():
+    await bot.wait_until_ready()
     print(f'Self-bot đã sẵn sàng với tên {bot.user}')
+    
     # Kiểm tra xem bot có trong server không
     guild = bot.get_guild(SERVER_ID)
-    if guild:
-        print(f"Bot đã tham gia server: {guild.name}")
-    else:
+    if not guild:
         print(f"Bot không tìm thấy server với ID {SERVER_ID}. Đảm bảo tài khoản đã tham gia server!")
-
-# Dùng on_member_update để phát hiện người tham gia kênh thoại
-@bot.event
-async def on_member_update(before, after):
-    # Chỉ xử lý trong server cụ thể
-    if before.guild.id != SERVER_ID:
         return
 
-    # Nếu bot là người thay đổi trạng thái (để tránh vòng lặp)
-    if before.id == bot.user.id:
-        return
+    print(f"Bot đã tham gia server: {guild.name}")
 
-    # Nếu có người tham gia kênh thoại
-    if after.voice and after.voice.channel and (not before.voice or not before.voice.channel):
-        print(f"{after.name} đã tham gia kênh {after.voice.channel.name}")
-        # Kiểm tra xem bot đã ở trong kênh thoại nào chưa
-        voice_client = discord.utils.get(bot.voice_clients, guild=before.guild)
-        if voice_client:
-            print(f"Bot đã ở trong kênh {voice_client.channel.name}, bỏ qua...")
-            return
-        
-        # Tham gia kênh thoại
-        try:
-            voice_client = await after.voice.channel.connect()
-            print(f"Bot đã tham gia kênh {after.voice.channel.name}")
-            # Bắt đầu ghi âm từ kênh thoại
-            asyncio.create_task(record_audio(voice_client, after.voice.channel.name))
-        except Exception as e:
-            print(f"Lỗi khi tham gia kênh {after.voice.channel.name}: {e}")
-
-    # Nếu người cuối cùng rời kênh, bot cũng rời
-    if before.voice and before.voice.channel and (not after.voice or not after.voice.channel):
-        voice_client = discord.utils.get(bot.voice_clients, guild=before.guild)
-        if voice_client and voice_client.channel == before.voice.channel:
-            # Kiểm tra xem còn ai trong kênh không
-            if len(before.voice.channel.members) == 1:  # Chỉ còn bot
+    while not bot.is_closed():
+        voice_channels = guild.voice_channels
+        for channel in voice_channels:
+            members = channel.members
+            if members and bot.user not in members:  # Nếu có người trong kênh và bot chưa tham gia
+                print(f"Phát hiện người dùng trong kênh {channel.name}")
+                # Kiểm tra xem bot đã ở trong kênh thoại nào chưa
+                voice_client = discord.utils.get(bot.voice_clients, guild=guild)
+                if voice_client:
+                    print(f"Bot đã ở trong kênh {voice_client.channel.name}, bỏ qua...")
+                    continue
+                
+                # Tham gia kênh thoại
+                try:
+                    voice_client = await channel.connect()
+                    print(f"Bot đã tham gia kênh {channel.name}")
+                    # Bắt đầu ghi âm
+                    asyncio.create_task(record_audio(voice_client, channel.name))
+                except Exception as e:
+                    print(f"Lỗi khi tham gia kênh {channel.name}: {e}")
+            elif voice_client and voice_client.channel == channel and len(channel.members) == 1:
+                # Nếu chỉ còn bot trong kênh, rời kênh
                 await voice_client.disconnect()
-                print(f"Bot đã rời kênh {before.voice.channel.name} vì không còn ai trong kênh")
+                print(f"Bot đã rời kênh {channel.name} vì không còn ai trong kênh")
+        
+        await asyncio.sleep(10)  # Kiểm tra mỗi 10 giây
+
+# Sự kiện khi bot sẵn sàng (dự phòng)
+@bot.event
+async def on_ready():
+    print(f'Self-bot đã sẵn sàng (on_ready) với tên {bot.user}')
+
+# Chạy hàm kiểm tra định kỳ
+bot.loop.create_task(check_voice_channels())
 
 # Chạy bot với user token (lấy từ biến môi trường trên Railway)
 bot.run(os.getenv('DISCORD_TOKEN'))
