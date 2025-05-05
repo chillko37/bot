@@ -8,9 +8,6 @@ import time
 # Khởi tạo bot
 bot = commands.Bot(command_prefix='!', self_bot=True)
 
-# Thêm log để kiểm tra bot khởi động
-print("Bot đang khởi động...")
-
 # Cấu hình ghi âm
 SAMPLE_RATE = 48000  # Tần số mẫu của Discord
 SAMPLE_WIDTH = 2  # 16-bit audio (2 bytes per sample)
@@ -110,7 +107,6 @@ async def record_audio(voice_client, channel_name):
 
 # Hàm kiểm tra định kỳ người tham gia kênh thoại
 async def check_voice_channels():
-    await bot.wait_until_ready()
     print(f'Self-bot đã sẵn sàng với tên {bot.user}')
     
     # Kiểm tra xem bot có trong server không
@@ -148,13 +144,18 @@ async def check_voice_channels():
         
         await asyncio.sleep(10)  # Kiểm tra mỗi 10 giây
 
-# Sự kiện khi bot sẵn sàng (dự phòng)
+# Hàm khởi tạo bất đồng bộ
 @bot.event
 async def on_ready():
     print(f'Self-bot đã sẵn sàng (on_ready) với tên {bot.user}')
+    # Chạy hàm kiểm tra kênh thoại
+    await check_voice_channels()
 
-# Chạy hàm kiểm tra định kỳ
-bot.loop.create_task(check_voice_channels())
+# Chạy bot
+async def main():
+    print("Bot đang khởi động...")
+    await bot.start(os.getenv('DISCORD_TOKEN'))
 
-# Chạy bot với user token (lấy từ biến môi trường trên Railway)
-bot.run(os.getenv('DISCORD_TOKEN'))
+# Chạy chương trình
+if __name__ == "__main__":
+    asyncio.run(main())
