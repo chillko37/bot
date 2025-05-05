@@ -5,20 +5,11 @@ import os
 from datetime import datetime
 import time
 
-# Khởi tạo self-bot với intents
-try:
-    intents = discord.Intents.default()
-    intents.guilds = True
-    intents.voice_states = True
-except AttributeError:
-    print("Intents không được hỗ trợ trong phiên bản này của discord.py-self. Chạy mà không dùng Intents.")
-    intents = None
+# Khởi tạo bot (bỏ Intents để tránh lỗi)
+bot = commands.Bot(command_prefix='!', self_bot=True)
 
-# Khởi tạo bot (có hoặc không có intents tùy thuộc vào phiên bản thư viện)
-if intents:
-    bot = commands.Bot(command_prefix='!', intents=intents, self_bot=True)
-else:
-    bot = commands.Bot(command_prefix='!', self_bot=True)
+# Thêm log để kiểm tra bot khởi động
+print("Bot đang khởi động...")
 
 # Cấu hình ghi âm
 SAMPLE_RATE = 48000  # Tần số mẫu của Discord
@@ -27,7 +18,7 @@ CHANNELS = 2  # Stereo
 MAX_FILE_SIZE = 8 * 1024 * 1024  # 8MB in bytes
 OUTPUT_DIR = "recordings"
 
-# ID của server (từ link https://discord.gg/ahex)
+# ID của server (theo yêu cầu của bạn)
 SERVER_ID = 1191611855433646140
 
 # ID của bạn để gửi file ghi âm qua DM
@@ -98,7 +89,7 @@ async def record_audio(voice_client, channel_name):
         while voice_client.is_connected():
             await asyncio.sleep(1)  # Kiểm tra mỗi giây
             # Lấy dữ liệu từ sink
-            if sink.audio_data:
+            if hasattr(sink, 'audio_data') and sink.audio_data:
                 new_data = sink.get_data()
                 data += new_data
                 
@@ -121,44 +112,50 @@ async def record_audio(voice_client, channel_name):
 @bot.event
 async def on_ready():
     print(f'Self-bot đã sẵn sàng với tên {bot.user}')
+    # Kiểm tra xem bot có trong server không
+    guild = bot.get_guild(SERVER_ID)
+    if guild:
+        print(f"Bot đã tham gia server: {guild.name}")
+    else:
+        print(f"Bot không tìm thấy server với ID {SERVER_ID}. Đảm bảo tài khoản đã tham gia server!")
 
-# Sự kiện khi có người tham gia hoặc rời kênh thoại
+# Dùng on_member_update để phát hiện người tham gia kênh thoại
 @bot.event
-async def on_voice_state_update(member, before, after):
+async def on_member_update(before, after):
     # Chỉ xử lý trong server cụ thể
-    if member.guild.id != SERVER_ID:
+    if before.guild.id != SERVER_ID:
         return
 
     # Nếu bot là người thay đổi trạng thái (để tránh vòng lặp)
-    if member == bot.user:
+    if before.id == bot.user.id:
         return
 
     # Nếu có người tham gia kênh thoại
-    if after.channel and not before.channel:
-        print(f"{member.name} đã tham gia kênh {after.channel.name}")
+    if after.voice and after.voice.channel and (not before.voice or not before.voice.channel):
+        print(f"{after.name} đã tham gia kênh {after.voice.channel.name}")
         # Kiểm tra xem bot đã ở trong kênh thoại nào chưa
-        voice_client = discord.utils.get(bot.voice_clients, guild=member.guild)
+        voice_client = discord.utils.get(bot.voice_clients, guild=before.guild)
         if voice_client:
             print(f"Bot đã ở trong kênh {voice_client.channel.name}, bỏ qua...")
             return
         
         # Tham gia kênh thoại
         try:
-            voice_client = await after.channel.connect()
-            print(f"Bot đã tham gia kênh {after.channel.name}")
+            voice_client = await after.voice.channel.connect()
+            print(f"Bot đã tham gia kênh {after.voice.channel.name}")
             # Bắt đầu ghi âm từ kênh thoại
-            asyncio.create_task(record_audio(voice_client, after.channel.name))
+            asyncio.create_task(record_audio(voice_client, after.voice.channel.name))
         except Exception as e:
-            print(f"Lỗi khi tham gia kênh {after.channel.name}: {e}")
+            print(f"Lỗi khi tham gia kênh {after.voice.channel.name}: {e}")
 
     # Nếu người cuối cùng rời kênh, bot cũng rời
-    if before.channel and not after.channel:
-        voice_client = discord.utils.get(bot.voice_clients, guild=member.guild)
-        if voice_client and voice_client.channel == before.channel:
+    if before.voice and before.voice.channel and (not after.voice or not after.voice.channel):
+        voice_client = discord.utils.get(bot.voice_clients, guild=before.guild)
+        if voice_client and voice_client.channel == before.voice.channel:
             # Kiểm tra xem còn ai trong kênh không
-            if len(before.channel.members) == 1:  # Chỉ còn bot
+            if len(before.voice.channel.members) == 1:  # Chỉ còn bot
                 await voice_client.disconnect()
-                print(f"Bot đã rời kênh {before.channel.name} vì không còn ai trong kênh")
+                print(f"Bot đã rời kênh {before.voice.channel.name} vì không còn ai trong kênh")
 
 # Chạy bot với user token (lấy từ biến môi trường trên Railway)
 bot.run(os.getenv('DISCORD_TOKEN'))
