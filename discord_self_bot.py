@@ -72,26 +72,36 @@ async def record_audio(voice_client, channel_name):
         print("Không có voice client để ghi âm")
         return
 
+    print(f"Bắt đầu ghi âm từ kênh {channel_name}...")
+
     # Tạo sink để nhận luồng âm thanh từ kênh thoại
     try:
-        sink = discord.sinks.WaveSink()
+        sink = discord.sinks.PCMVolumeTransformerSink()
         voice_client.start_recording(sink, None)
+        print("Đã khởi tạo sink ghi âm thành công")
     except AttributeError:
-        print("WaveSink không được hỗ trợ trong phiên bản này của discord.py-self.")
-        return
+        print("PCMVolumeTransformerSink không được hỗ trợ. Thử cách ghi âm khác...")
+        try:
+            # Cách ghi âm thay thế nếu WaveSink không hoạt động
+            sink = discord.sinks.RawSink()
+            voice_client.start_recording(sink, None)
+            print("Đã khởi tạo RawSink ghi âm thành công")
+        except AttributeError:
+            print("RawSink không được hỗ trợ. Không thể ghi âm.")
+            return
     
     data = b""
     part_number = 1
     start_time = time.time()
-    print(f"Đang ghi âm từ kênh {channel_name}...")
 
     try:
         while voice_client.is_connected():
             await asyncio.sleep(1)  # Kiểm tra mỗi giây
             # Lấy dữ liệu từ sink
             if hasattr(sink, 'audio_data') and sink.audio_data:
-                new_data = sink.get_data()
+                new_data = sink.audio_data
                 data += new_data
+                print(f"Đã ghi âm {len(new_data)} bytes từ kênh {channel_name}")
                 
                 # Kiểm tra kích thước
                 if len(data) >= MAX_FILE_SIZE:
@@ -99,6 +109,8 @@ async def record_audio(voice_client, channel_name):
                     data = b""
                     part_number += 1
                     await asyncio.sleep(5)  # Chờ 5 giây trước khi gửi file tiếp theo để tránh bị chặn
+            else:
+                print(f"Không có dữ liệu âm thanh mới từ kênh {channel_name}")
     except Exception as e:
         print(f"Lỗi khi ghi âm: {e}")
     finally:
