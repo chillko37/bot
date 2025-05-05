@@ -121,6 +121,17 @@ async def check_voice_channels():
 
     print(f"Bot đã tham gia server: {guild.name}")
 
+    # Kiểm tra quyền của bot
+    me = guild.get_member(bot.user.id)
+    if not me:
+        print("Bot không tìm thấy chính nó trong server. Đảm bảo tài khoản đã tham gia!")
+        return
+
+    permissions = me.guild_permissions
+    if not permissions.connect or not permissions.speak:
+        print("Bot không có quyền Connect hoặc Speak trong server. Vui lòng kiểm tra quyền!")
+        return
+
     while not bot.is_closed():
         voice_client = discord.utils.get(bot.voice_clients, guild=guild)  # Gán voice_client ở đây
         voice_channels = guild.voice_channels
@@ -147,7 +158,7 @@ async def check_voice_channels():
                 print(f"Bot đã rời kênh {channel.name} vì không còn ai trong kênh")
                 voice_client = None  # Đặt lại voice_client sau khi rời
         
-        await asyncio.sleep(10)  # Kiểm tra mỗi 10 giây
+        await asyncio.sleep(5)  # Kiểm tra mỗi 5 giây để giảm độ trễ
 
 # Sự kiện khi bot sẵn sàng (dự phòng)
 @bot.event
