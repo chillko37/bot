@@ -4,6 +4,8 @@ import asyncio
 import os
 from datetime import datetime
 import time
+import signal
+import sys
 
 # Thêm log ngay từ đầu
 print("Bắt đầu khởi động bot...")
@@ -144,6 +146,7 @@ async def check_voice_channels():
         return
 
     recently_disconnected = False  # Biến để theo dõi trạng thái vừa ngắt kết nối
+    last_channel_id = None  # Biến để lưu ID kênh vừa rời
     while not bot.is_closed():
         voice_client = discord.utils.get(bot.voice_clients, guild=guild)  # Gán voice_client ở đây
         voice_channels = guild.voice_channels
@@ -160,9 +163,10 @@ async def check_voice_channels():
                 # Nếu không còn người dùng thật trong kênh hiện tại, rời kênh
                 await voice_client.disconnect()
                 print(f"Bot đã rời kênh {current_channel.name} vì không còn người dùng thật trong kênh")
+                last_channel_id = current_channel.id  # Lưu ID kênh vừa rời
                 voice_client = None
                 recently_disconnected = True
-                await asyncio.sleep(5)  # Chờ 5 giây trước khi kiểm tra kênh khác để tránh vòng lặp
+                await asyncio.sleep(10)  # Chờ 10 giây trước khi kiểm tra kênh khác để tránh vòng lặp
             else:
                 recently_disconnected = False
 
@@ -175,14 +179,20 @@ async def check_voice_channels():
             human_members = [member for member in members if not member.bot and member.id != bot.user.id]
             print(f"Số lượng người dùng thật trong kênh {channel.name}: {len(human_members)}")
 
+            # Tránh tham gia lại kênh vừa rời
+            if channel.id == last_channel_id and recently_disconnected:
+                print(f"Bỏ qua kênh {channel.name} vì vừa rời kênh này")
+                continue
+
             if human_members and bot.user not in members:  # Nếu có người dùng thật trong kênh và bot chưa tham gia
                 print(f"Phát hiện người dùng thật trong kênh {channel.name}")
                 # Kiểm tra xem bot đã ở trong kênh khác chưa
                 if voice_client:
                     print(f"Bot đã ở trong kênh {voice_client.channel.name}, rời kênh để tham gia kênh mới...")
                     await voice_client.disconnect()
+                    last_channel_id = voice_client.channel.id
                     voice_client = None
-                    await asyncio.sleep(1)  # Chờ 1 giây trước khi tham gia kênh mới
+                    await asyncio.sleep(5)  # Chờ 5 giây trước khi tham gia kênh mới
                 
                 # Tham gia kênh mới
                 try:
@@ -198,7 +208,7 @@ async def check_voice_channels():
         
         # Nếu vừa rời kênh, chờ lâu hơn để tránh tham gia lại ngay
         if recently_disconnected:
-            await asyncio.sleep(10)  # Chờ thêm 10 giây nếu vừa rời kênh
+            await asyncio.sleep(15)  # Chờ thêm 15 giây nếu vừa rời kênh
         else:
             await asyncio.sleep(5)  # Kiểm tra mỗi 5 giây nếu không vừa rời kênh
 
@@ -214,6 +224,35 @@ async def on_connect():
 async def on_ready():
     print(f'Self-bot đã sẵn sàng (on_ready) với tên {bot.user}')
 
+# Hàm xử lý khi container dừng
+async def shutdown():
+    print("Bot đang dừng lại...")
+    # Ngắt kết nối voice nếu đang kết nối
+    for voice_client in bot.voice_clients:
+        await voice_client.disconnect()
+    # Đóng bot
+    await bot.close()
+    print("Bot đã dừng lại an toàn.")
+
+# Xử lý tín hiệu dừng container
+def handle_shutdown(loop):
+    tasks = [task for task in asyncio.all_tasks(loop) if task is not asyncio.current_task()]
+    for task in tasks:
+        task.cancel()
+    loop.stop()
+    loop.run_until_complete(loop.shutdown_asyncgens())
+    loop.close()
+
+# Gắn xử lý tín hiệu dừng
+loop = asyncio.get_event_loop()
+for sig in (signal.SIGINT, signal.SIGTERM):
+    loop.add_signal_handler(sig, lambda: asyncio.ensure_future(shutdown()))
+
 # Chạy bot
-print("Đang chạy bot với token từ biến môi trường...")
-bot.run(os.getenv('DISCORD_TOKEN'))
+try:
+    print("Đang chạy bot với token từ biến môi trường...")
+    loop.run_until_complete(bot.start(os.getenv('DISCORD_TOKEN')))
+except KeyboardInterrupt:
+    loop.run_until_complete(shutdown())
+finally:
+    handle_shutdown(loop)
