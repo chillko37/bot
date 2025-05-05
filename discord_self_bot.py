@@ -122,13 +122,13 @@ async def check_voice_channels():
     print(f"Bot đã tham gia server: {guild.name}")
 
     while not bot.is_closed():
+        voice_client = discord.utils.get(bot.voice_clients, guild=guild)  # Gán voice_client ở đây
         voice_channels = guild.voice_channels
         for channel in voice_channels:
             members = channel.members
             if members and bot.user not in members:  # Nếu có người trong kênh và bot chưa tham gia
                 print(f"Phát hiện người dùng trong kênh {channel.name}")
                 # Kiểm tra xem bot đã ở trong kênh thoại nào chưa
-                voice_client = discord.utils.get(bot.voice_clients, guild=guild)
                 if voice_client:
                     print(f"Bot đã ở trong kênh {voice_client.channel.name}, bỏ qua...")
                     continue
@@ -145,6 +145,7 @@ async def check_voice_channels():
                 # Nếu chỉ còn bot trong kênh, rời kênh
                 await voice_client.disconnect()
                 print(f"Bot đã rời kênh {channel.name} vì không còn ai trong kênh")
+                voice_client = None  # Đặt lại voice_client sau khi rời
         
         await asyncio.sleep(10)  # Kiểm tra mỗi 10 giây
 
