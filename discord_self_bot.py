@@ -110,6 +110,7 @@ async def record_audio(voice_client, channel_name):
 
 # Hàm kiểm tra định kỳ người tham gia kênh thoại
 async def check_voice_channels():
+    print("Đang chạy hàm check_voice_channels...")
     await bot.wait_until_ready()
     print(f'Self-bot đã sẵn sàng với tên {bot.user}')
     
@@ -135,8 +136,10 @@ async def check_voice_channels():
     while not bot.is_closed():
         voice_client = discord.utils.get(bot.voice_clients, guild=guild)  # Gán voice_client ở đây
         voice_channels = guild.voice_channels
+        print(f"Đang kiểm tra {len(voice_channels)} kênh voice trong server...")
         for channel in voice_channels:
             members = channel.members
+            print(f"Kênh {channel.name} có {len(members)} thành viên: {[member.name for member in members]}")
             if members and bot.user not in members:  # Nếu có người trong kênh và bot chưa tham gia
                 print(f"Phát hiện người dùng trong kênh {channel.name}")
                 # Kiểm tra xem bot đã ở trong kênh thoại nào chưa
@@ -160,12 +163,17 @@ async def check_voice_channels():
         
         await asyncio.sleep(5)  # Kiểm tra mỗi 5 giây để giảm độ trễ
 
+# Sự kiện khi bot kết nối Gateway
+@bot.event
+async def on_connect():
+    print("Bot đã kết nối với Gateway!")
+    # Chạy hàm kiểm tra kênh thoại
+    bot.loop.create_task(check_voice_channels())
+
 # Sự kiện khi bot sẵn sàng (dự phòng)
 @bot.event
 async def on_ready():
     print(f'Self-bot đã sẵn sàng (on_ready) với tên {bot.user}')
-    # Chạy hàm kiểm tra kênh thoại
-    bot.loop.create_task(check_voice_channels())
 
 # Chạy bot
 print("Đang chạy bot với token từ biến môi trường...")
