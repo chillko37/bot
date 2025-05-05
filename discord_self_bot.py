@@ -5,11 +5,20 @@ import os
 from datetime import datetime
 import time
 
-# Khởi tạo self-bot với prefix và intents
-intents = discord.Intents.default()
-intents.guilds = True
-intents.voice_states = True
-bot = commands.Bot(command_prefix='!', intents=intents, self_bot=True)
+# Khởi tạo self-bot với intents
+try:
+    intents = discord.Intents.default()
+    intents.guilds = True
+    intents.voice_states = True
+except AttributeError:
+    print("Intents không được hỗ trợ trong phiên bản này của discord.py-self. Chạy mà không dùng Intents.")
+    intents = None
+
+# Khởi tạo bot (có hoặc không có intents tùy thuộc vào phiên bản thư viện)
+if intents:
+    bot = commands.Bot(command_prefix='!', intents=intents, self_bot=True)
+else:
+    bot = commands.Bot(command_prefix='!', self_bot=True)
 
 # Cấu hình ghi âm
 SAMPLE_RATE = 48000  # Tần số mẫu của Discord
@@ -58,6 +67,9 @@ async def save_and_send_audio(channel_name, data, part_number):
         try:
             await user.send(f"Ghi âm từ kênh {channel_name} (phần {part_number})", file=discord.File(file_name))
             print(f"Đã gửi file ghi âm đến DM của bạn ({user.name})")
+            # Xóa file sau khi gửi để bảo mật
+            os.remove(file_name)
+            print(f"Đã xóa file: {file_name}")
         except Exception as e:
             print(f"Lỗi khi gửi file qua DM: {e}")
     else:
@@ -70,8 +82,12 @@ async def record_audio(voice_client, channel_name):
         return
 
     # Tạo sink để nhận luồng âm thanh từ kênh thoại
-    sink = discord.sinks.WaveSink()
-    voice_client.start_recording(sink, None)
+    try:
+        sink = discord.sinks.WaveSink()
+        voice_client.start_recording(sink, None)
+    except AttributeError:
+        print("WaveSink không được hỗ trợ trong phiên bản này của discord.py-self.")
+        return
     
     data = b""
     part_number = 1
@@ -91,6 +107,7 @@ async def record_audio(voice_client, channel_name):
                     await save_and_send_audio(channel_name, data, part_number)
                     data = b""
                     part_number += 1
+                    await asyncio.sleep(5)  # Chờ 5 giây trước khi gửi file tiếp theo để tránh bị chặn
     except Exception as e:
         print(f"Lỗi khi ghi âm: {e}")
     finally:
