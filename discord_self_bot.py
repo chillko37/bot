@@ -143,6 +143,7 @@ async def check_voice_channels():
         print("Bot không có quyền Connect hoặc Speak trong server. Vui lòng kiểm tra quyền!")
         return
 
+    recently_disconnected = False  # Biến để theo dõi trạng thái vừa ngắt kết nối
     while not bot.is_closed():
         voice_client = discord.utils.get(bot.voice_clients, guild=guild)  # Gán voice_client ở đây
         voice_channels = guild.voice_channels
@@ -160,7 +161,10 @@ async def check_voice_channels():
                 await voice_client.disconnect()
                 print(f"Bot đã rời kênh {current_channel.name} vì không còn người dùng thật trong kênh")
                 voice_client = None
-                await asyncio.sleep(1)  # Chờ 1 giây trước khi kiểm tra kênh khác
+                recently_disconnected = True
+                await asyncio.sleep(5)  # Chờ 5 giây trước khi kiểm tra kênh khác để tránh vòng lặp
+            else:
+                recently_disconnected = False
 
         # Kiểm tra tất cả kênh voice để tìm kênh có người dùng thật
         for channel in voice_channels:
@@ -186,12 +190,17 @@ async def check_voice_channels():
                     print(f"Bot đã tham gia kênh {channel.name}")
                     # Bắt đầu ghi âm
                     bot.loop.create_task(record_audio(voice_client, channel.name))
+                    recently_disconnected = False
                 except Exception as e:
                     print(f"Lỗi khi tham gia kênh {channel.name}: {e}")
                     voice_client = None  # Đặt lại voice_client nếu không tham gia được
                     continue  # Tiếp tục kiểm tra kênh khác
         
-        await asyncio.sleep(5)  # Kiểm tra mỗi 5 giây để giảm độ trễ
+        # Nếu vừa rời kênh, chờ lâu hơn để tránh tham gia lại ngay
+        if recently_disconnected:
+            await asyncio.sleep(10)  # Chờ thêm 10 giây nếu vừa rời kênh
+        else:
+            await asyncio.sleep(5)  # Kiểm tra mỗi 5 giây nếu không vừa rời kênh
 
 # Sự kiện khi bot kết nối Gateway
 @bot.event
