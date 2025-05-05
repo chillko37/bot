@@ -50,7 +50,7 @@ async def save_and_send_audio(channel_name, data, part_number):
         f.write((len(data)).to_bytes(4, 'little'))  # Data size
         f.write(data)  # Audio data
     
-    print(f"Đã lưu file ghi âm: {file_name}")
+    print(f"Đã lưu file ghi âm: {file_name} (kích thước: {len(data)} bytes)")
 
     # Gửi file ghi âm qua DM
     user = await bot.fetch_user(YOUR_USER_ID)
@@ -105,7 +105,10 @@ async def record_audio(voice_client, channel_name):
         voice_client.stop_recording()
         # Lưu và gửi phần cuối nếu còn dữ liệu
         if data:
+            print(f"Người dùng ngắt kết nối, gửi file ghi âm còn lại (kích thước: {len(data)} bytes)...")
             await save_and_send_audio(channel_name, data, part_number)
+        else:
+            print("Không có dữ liệu ghi âm để gửi (file rỗng).")
         print("Đã dừng ghi âm từ kênh thoại")
 
 # Hàm kiểm tra định kỳ người tham gia kênh thoại
@@ -140,8 +143,13 @@ async def check_voice_channels():
         for channel in voice_channels:
             members = channel.members
             print(f"Kênh {channel.name} có {len(members)} thành viên: {[member.name for member in members]}")
-            if members and bot.user not in members:  # Nếu có người trong kênh và bot chưa tham gia
-                print(f"Phát hiện người dùng trong kênh {channel.name}")
+            
+            # Đếm số lượng người dùng thật (không phải bot)
+            human_members = [member for member in members if not member.bot and member.id != bot.user.id]
+            print(f"Số lượng người dùng thật trong kênh {channel.name}: {len(human_members)}")
+
+            if human_members and bot.user not in members:  # Nếu có người dùng thật trong kênh và bot chưa tham gia
+                print(f"Phát hiện người dùng thật trong kênh {channel.name}")
                 # Kiểm tra xem bot đã ở trong kênh thoại nào chưa
                 if voice_client:
                     print(f"Bot đã ở trong kênh {voice_client.channel.name}, bỏ qua...")
@@ -155,10 +163,10 @@ async def check_voice_channels():
                     bot.loop.create_task(record_audio(voice_client, channel.name))
                 except Exception as e:
                     print(f"Lỗi khi tham gia kênh {channel.name}: {e}")
-            elif voice_client and voice_client.channel == channel and len(channel.members) == 1:
-                # Nếu chỉ còn bot trong kênh, rời kênh
+            elif voice_client and voice_client.channel == channel and len(human_members) == 0:
+                # Nếu không còn người dùng thật trong kênh, rời kênh (bỏ qua các bot khác)
                 await voice_client.disconnect()
-                print(f"Bot đã rời kênh {channel.name} vì không còn ai trong kênh")
+                print(f"Bot đã rời kênh {channel.name} vì không còn người dùng thật trong kênh")
                 voice_client = None  # Đặt lại voice_client sau khi rời
         
         await asyncio.sleep(5)  # Kiểm tra mỗi 5 giây để giảm độ trễ
